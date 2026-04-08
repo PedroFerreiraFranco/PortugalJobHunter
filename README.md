@@ -35,6 +35,24 @@ Agregador de vagas de tecnologia em Portugal, com interface web em Flask e colet
 
 Acesse: http://127.0.0.1:5000
 
+## Deploy na Vercel
+
+Este projeto já está configurado para Vercel com:
+
+- `api/index.py` como entrada serverless Python
+- `vercel.json` roteando todas as rotas para o app Flask
+
+Passo a passo:
+
+1. Suba este repositório para o GitHub.
+2. Na Vercel, clique em **Add New Project** e selecione o repositório.
+3. Mantenha as configurações padrão de Python e faça o deploy.
+
+Observação importante:
+
+- O cache em memória (TTL) funciona por instância serverless e pode ser reiniciado a qualquer momento.
+  Ou seja, no ambiente da Vercel ele não é persistente/global entre invocações.
+
 ## Endpoints
 
 - `GET /` — home com SSR das últimas vagas
