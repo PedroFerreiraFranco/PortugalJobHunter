@@ -160,6 +160,7 @@ def buscar():
     - termo
     - localizacao (opcional)
     - modelo_trabalho (opcional)
+    - plataforma (opcional: todas|itjobs|net_empregos)
     """
     try:
         data = request.form if request.method == "POST" else request.args
@@ -167,6 +168,16 @@ def buscar():
         termo_busca = (data.get("termo") or "").strip()
         localizacao = (data.get("localizacao") or "").strip()
         modelo_trabalho = (data.get("modelo_trabalho") or "").strip()
+        plataforma = (data.get("plataforma") or "todas").strip().lower()
+
+        plataformas_validas = {"todas", "itjobs", "net_empregos"}
+        if plataforma not in plataformas_validas:
+            return jsonify(
+                {
+                    "sucesso": False,
+                    "mensagem": "Plataforma inválida. Use: todas, itjobs ou net_empregos.",
+                }
+            )
 
         if not termo_busca and not (localizacao or modelo_trabalho):
             return jsonify(
@@ -181,11 +192,27 @@ def buscar():
         else:
             localizacao_texto = ITJOBS_LOCATION_ID_TO_NAME.get(localizacao, "")
 
+        if plataforma == "net_empregos" and not termo_busca and not localizacao_texto:
+            return jsonify(
+                {
+                    "sucesso": False,
+                    "mensagem": (
+                        "Para buscar apenas no Net-Empregos, informe um termo ou localização. "
+                        "O filtro de modelo é aplicado principalmente no ITJobs."
+                    ),
+                }
+            )
+
+        avisos: List[str] = []
+        if plataforma == "net_empregos" and modelo_trabalho:
+            avisos.append("Filtro de modelo ignorado para Net-Empregos.")
+
         vagas = buscar_todas_vagas(
             termo_busca=termo_busca,
             localizacao=localizacao,
             modelo_trabalho=modelo_trabalho,
             localizacao_texto=localizacao_texto,
+            plataforma=plataforma,
         )
 
         resp = jsonify(
@@ -193,6 +220,8 @@ def buscar():
                 "sucesso": True,
                 "total": len(vagas),
                 "termo": termo_busca,
+                "plataforma": plataforma,
+                "avisos": avisos,
                 "vagas": vagas,
             }
         )

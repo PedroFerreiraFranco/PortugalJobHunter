@@ -695,12 +695,14 @@ def buscar_todas_vagas(
     localizacao: str = "",
     modelo_trabalho: str = "",
     localizacao_texto: str = "",
+    plataforma: str = "todas",
     verbose: bool = False,
 ) -> List[Vaga]:
     """Agrega vagas de ITJobs e Net-Empregos.
 
     Regras principais:
     - Permite busca sem termo desde que exista ao menos um filtro.
+    - Permite escolher a plataforma alvo: ITJobs, Net-Empregos ou ambas.
     - O filtro de regime (presencial/remoto/híbrido) é aplicado apenas no ITJobs.
     - O Net-Empregos é consumido via RSS e filtrado localmente.
 
@@ -709,31 +711,39 @@ def buscar_todas_vagas(
         localizacao: ID (ITJobs) ou texto (pós-filtro) da localização.
         modelo_trabalho: Regime desejado (aplicado no ITJobs).
         localizacao_texto: Nome do distrito (usado para pós-filtro no Net-Empregos).
+        plataforma: Plataforma alvo ("todas", "itjobs" ou "net_empregos").
         verbose: Quando True, emite logs no console.
     """
     todas_vagas: List[Vaga] = []
 
     termo_busca = (termo_busca or "").strip()
+    plataforma = (plataforma or "todas").strip().lower()
+    if plataforma not in {"todas", "itjobs", "net_empregos"}:
+        plataforma = "todas"
 
     if not termo_busca and not (localizacao or modelo_trabalho):
         return todas_vagas
 
-    if verbose:
-        _safe_print(f"Buscando vagas no ITJobs (termo={termo_busca!r})...")
+    buscar_itjobs = plataforma in {"todas", "itjobs"}
+    buscar_net = plataforma in {"todas", "net_empregos"}
 
-    vagas_itjobs = buscar_vagas_itjobs(
-        termo=termo_busca,
-        localizacao=localizacao,
-        modelo_trabalho=modelo_trabalho,
-        incluir_detalhes=True,
-        max_detalhes=10,
-    )
-    todas_vagas.extend(vagas_itjobs)
+    if buscar_itjobs:
+        if verbose:
+            _safe_print(f"Buscando vagas no ITJobs (termo={termo_busca!r})...")
 
-    if verbose:
-        _safe_print(f"OK - Encontradas {len(vagas_itjobs)} vagas no ITJobs")
+        vagas_itjobs = buscar_vagas_itjobs(
+            termo=termo_busca,
+            localizacao=localizacao,
+            modelo_trabalho=modelo_trabalho,
+            incluir_detalhes=True,
+            max_detalhes=10,
+        )
+        todas_vagas.extend(vagas_itjobs)
 
-    if not modelo_trabalho and (termo_busca or localizacao_texto):
+        if verbose:
+            _safe_print(f"OK - Encontradas {len(vagas_itjobs)} vagas no ITJobs")
+
+    if buscar_net and (termo_busca or localizacao_texto):
         if verbose:
             _safe_print(
                 f"Buscando vagas no Net-Empregos (termo={termo_busca!r}, local={localizacao_texto!r})..."
