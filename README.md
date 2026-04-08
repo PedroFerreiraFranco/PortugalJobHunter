@@ -19,10 +19,33 @@ Agregador de vagas de tecnologia em Portugal, com interface web em Flask e colet
 
 ## Estrutura
 
-```text
-.
-├── app.py
-├── scraper.py
-├── requirements.txt
-└── templates
-    └── index.html
+    .
+    ├── app.py
+    ├── scraper.py
+    ├── requirements.txt
+    └── templates
+        └── index.html
+
+## Como rodar localmente
+
+    python -m venv .venv
+    .venv\Scripts\activate
+    pip install -r requirements.txt
+    python app.py
+
+Acesse: http://127.0.0.1:5000
+
+## Endpoints
+
+- `GET /` — home com SSR das últimas vagas
+- `GET /ultimas` — JSON das últimas vagas (5 por fonte)
+- `GET|POST /buscar` — busca agregada (retorna JSON)
+
+## Notas importantes
+
+- Scraping depende de HTML externo; seletores podem mudar.
+- Use com moderação para evitar sobrecarga nas plataformas.
+
+## Licença
+
+Projeto pessoal para fins educacionais e portfólio.
