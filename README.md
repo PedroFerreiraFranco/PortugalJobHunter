@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Portugal Job Hunter
 
 Agregador de vagas de tecnologia em Portugal, com interface web em Flask e coleta de dados em **ITJobs** e **Net-Empregos**.
@@ -20,40 +19,10 @@ Agregador de vagas de tecnologia em Portugal, com interface web em Flask e colet
 
 ## Estrutura
 
-```
+```text
 .
 ├── app.py
 ├── scraper.py
 ├── requirements.txt
 └── templates
     └── index.html
-```
-
-## Como rodar localmente
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
-```
-
-Acesse: http://127.0.0.1:5000
-
-## Endpoints
-
-- `GET /` — home com SSR das últimas vagas
-- `GET /ultimas` — JSON das últimas vagas (5 por fonte)
-- `GET|POST /buscar` — busca agregada (retorna JSON)
-
-## Notas importantes
-
-- Scraping depende de HTML externo; seletores podem mudar.
-- Use com moderação para evitar sobrecarga nas plataformas.
-
-## Licença
-
-Projeto pessoal para fins educacionais e portfólio.
-=======
-# PortugalJobHunter
->>>>>>> 69023794717ee38d52afa6815451a4a0be301b63
