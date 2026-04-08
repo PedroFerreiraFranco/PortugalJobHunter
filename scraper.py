@@ -454,6 +454,7 @@ def _parece_vaga_tech(texto: str) -> bool:
 def buscar_ultimas_itjobs(
     limite: int = 5,
     incluir_detalhes: bool = True,
+    max_detalhes: int = 10,
 ) -> List[Vaga]:
     """Retorna as últimas vagas do ITJobs (primeira página)."""
     vagas: List[Vaga] = []
@@ -527,7 +528,8 @@ def buscar_ultimas_itjobs(
         _safe_print(f"ITJobs: erro inesperado (últimas): {repr(e)}")
 
     if incluir_detalhes and vagas:
-        for vaga in vagas:
+        # Limita enriquecimento para evitar muitas requisições em sequência.
+        for vaga in vagas[: max(0, int(max_detalhes))]:
             detalhes = _extrair_detalhes_itjobs(vaga["link"])
             if detalhes.get("data_publicacao"):
                 vaga["data_publicacao"] = detalhes["data_publicacao"]

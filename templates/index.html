@@ -109,6 +109,27 @@
             padding-top: 4px;
         }
 
+        .load-more-wrap {
+            display: flex;
+            justify-content: center;
+            margin-top: 8px;
+            margin-bottom: 18px;
+        }
+
+        .btn-load-more {
+            background: transparent;
+            color: var(--blue);
+            border: 1px solid var(--blue);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-weight: 600;
+        }
+
+        .btn-load-more:hover {
+            background: rgba(30, 111, 217, 0.08);
+            color: var(--blue);
+        }
+
         .form-control,
         .form-select {
             background: var(--white);
@@ -264,8 +285,33 @@
             .hero {
                 padding: 36px 0 56px;
             }
+
+            .subtitle {
+                font-size: 0.95rem;
+            }
+
             .search-card {
                 padding: 16px 16px;
+                margin-bottom: 8px;
+            }
+
+            .results-panel {
+                padding-top: 0;
+            }
+
+            .job-card {
+                padding: 14px 14px;
+                margin-bottom: 12px;
+            }
+
+            .job-title {
+                font-size: 1.02rem;
+            }
+
+            .btn-search,
+            .btn-load-more {
+                min-height: 46px;
+                width: 100%;
             }
         }
     </style>
@@ -403,6 +449,14 @@
                                         </a>
                                     </div>
                                 {% endfor %}
+
+                                {% if ultimas_has_more %}
+                                    <div class="load-more-wrap" id="loadMoreInitialWrap">
+                                        <button class="btn btn-load-more" id="btnCarregarMaisUltimas" type="button">
+                                            Carregar mais vagas
+                                        </button>
+                                    </div>
+                                {% endif %}
                             {% else %}
                                 <div class="no-results">
                                     <i class="fas fa-search fa-3x mb-3"></i>
@@ -440,6 +494,21 @@
     
     <!-- JavaScript -->
     <script>
+        const ESTADO_ULTIMAS = {
+            page: Number('{{ ultimas_page|default(1) }}') || 1,
+            perPage: Number('{{ ultimas_per_page|default(10) }}') || 10,
+            hasMore: {{ 'true' if ultimas_has_more else 'false' }},
+            carregando: false
+        };
+
+        const ESTADO_BUSCA = {
+            vagas: [],
+            visiveis: 0,
+            passo: 10,
+            termo: '',
+            plataforma: 'todas'
+        };
+
         function escapeHtml(valor) {
             return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;',
@@ -487,61 +556,134 @@
             return html;
         }
 
+        function obterPlataformaLabel(plataforma) {
+            if (plataforma === 'itjobs') {
+                return 'no ITJobs';
+            }
+            if (plataforma === 'net_empregos') {
+                return 'no Net-Empregos';
+            }
+            return 'em ITJobs + Net-Empregos';
+        }
+
+        function renderizarBuscaPaginada() {
+            const resultados = document.getElementById('resultados');
+            const visiveis = ESTADO_BUSCA.vagas.slice(0, ESTADO_BUSCA.visiveis);
+            const total = ESTADO_BUSCA.vagas.length;
+
+            if (total === 0) {
+                resultados.innerHTML = `
+                    <div class="no-results">
+                        <i class="fas fa-search fa-3x mb-3"></i>
+                        <h4>Nenhuma vaga encontrada</h4>
+                        <p>Tente outros termos de busca</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const termoLabel = ESTADO_BUSCA.termo && ESTADO_BUSCA.termo.trim()
+                ? `para "<strong>${escapeHtml(ESTADO_BUSCA.termo)}</strong>"`
+                : 'para os filtros selecionados';
+
+            const plataformaLabel = obterPlataformaLabel(ESTADO_BUSCA.plataforma);
+
+            let html = `
+                <div class="alert alert-success alert-custom">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>${total}</strong> vaga(s) encontrada(s) ${termoLabel} ${plataformaLabel}
+                </div>
+            `;
+
+            html += renderizarCards(visiveis);
+
+            if (ESTADO_BUSCA.visiveis < total) {
+                html += `
+                    <div class="load-more-wrap">
+                        <button class="btn btn-load-more" type="button" id="btnCarregarMaisBusca">
+                            Carregar mais resultados
+                        </button>
+                    </div>
+                `;
+            }
+
+            resultados.innerHTML = html;
+
+            const btnMaisBusca = document.getElementById('btnCarregarMaisBusca');
+            if (btnMaisBusca) {
+                btnMaisBusca.addEventListener('click', () => {
+                    ESTADO_BUSCA.visiveis = Math.min(
+                        ESTADO_BUSCA.visiveis + ESTADO_BUSCA.passo,
+                        ESTADO_BUSCA.vagas.length
+                    );
+                    renderizarBuscaPaginada();
+                });
+            }
+        }
+
         async function carregarUltimas() {
+            if (ESTADO_ULTIMAS.carregando || !ESTADO_ULTIMAS.hasMore) {
+                return;
+            }
+
+            ESTADO_ULTIMAS.carregando = true;
             const loading = document.getElementById('loading');
             const resultados = document.getElementById('resultados');
+            const btnMais = document.getElementById('btnCarregarMaisUltimas');
 
-            loading.style.display = 'block';
-            resultados.innerHTML = '';
+            if (btnMais) {
+                btnMais.disabled = true;
+                btnMais.textContent = 'Carregando...';
+            }
 
             try {
-                const response = await fetch('/ultimas');
+                const proximaPagina = ESTADO_ULTIMAS.page + 1;
+                const response = await fetch(`/ultimas?page=${proximaPagina}&per_page=${ESTADO_ULTIMAS.perPage}`);
                 const data = await response.json();
 
-                loading.style.display = 'none';
-
                 if (!data.sucesso) {
-                    resultados.innerHTML = `
-                        <div class="alert alert-danger alert-custom">
-                            <i class="fas fa-exclamation-triangle"></i> ${data.mensagem || 'Erro ao carregar últimas vagas.'}
-                        </div>
-                    `;
+                    if (btnMais) {
+                        btnMais.disabled = false;
+                        btnMais.textContent = 'Carregar mais vagas';
+                    }
                     return;
                 }
 
-                const it = data.itjobs || [];
-                const ne = data.net_empregos || [];
-                const vagas = [...it, ...ne];
-
-                if (vagas.length === 0) {
-                    resultados.innerHTML = `
-                        <div class="no-results">
-                            <i class="fas fa-search fa-3x mb-3"></i>
-                            <h4>Sem vagas para mostrar agora</h4>
-                            <p>Faça uma pesquisa para começar.</p>
-                        </div>
-                    `;
-                    return;
+                const vagas = Array.isArray(data.vagas) ? data.vagas : [];
+                const wrapInicial = document.getElementById('loadMoreInitialWrap');
+                if (wrapInicial) {
+                    wrapInicial.remove();
                 }
 
-                let html = `
-                    <div class="alert alert-success alert-custom">
-                        <strong>Últimas oportunidades</strong> · ITJobs (${it.length}) · Net-Empregos (${ne.length})
-                    </div>
-                `;
+                if (vagas.length > 0) {
+                    resultados.insertAdjacentHTML('beforeend', renderizarCards(vagas));
+                }
 
-                html += renderizarCards(vagas);
-                resultados.innerHTML = html;
+                ESTADO_ULTIMAS.page = Number(data.page) || proximaPagina;
+                ESTADO_ULTIMAS.hasMore = Boolean(data.has_more);
+
+                if (ESTADO_ULTIMAS.hasMore) {
+                    resultados.insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="load-more-wrap" id="loadMoreInitialWrap"><button class="btn btn-load-more" id="btnCarregarMaisUltimas" type="button">Carregar mais vagas</button></div>`
+                    );
+
+                    const novoBtnMais = document.getElementById('btnCarregarMaisUltimas');
+                    if (novoBtnMais) {
+                        novoBtnMais.addEventListener('click', carregarUltimas);
+                    }
+                }
 
             } catch (error) {
-                loading.style.display = 'none';
-                resultados.innerHTML = `
-                    <div class="alert alert-danger alert-custom">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Erro ao carregar as últimas vagas. Tente novamente.
-                    </div>
-                `;
                 console.error('Erro:', error);
+            } finally {
+                ESTADO_ULTIMAS.carregando = false;
+
+                const btn = document.getElementById('btnCarregarMaisUltimas');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Carregar mais vagas';
+                }
             }
         }
 
@@ -578,41 +720,19 @@
                 loading.style.display = 'none';
 
                 if (data.sucesso) {
-                    if (data.total === 0) {
-                        resultados.innerHTML = `
-                            <div class="no-results">
-                                <i class="fas fa-search fa-3x mb-3"></i>
-                                <h4>Nenhuma vaga encontrada</h4>
-                                <p>Tente outros termos de busca</p>
-                            </div>
-                        `;
-                    } else {
-                        const termoLabel = data.termo && data.termo.trim()
-                            ? `para "<strong>${escapeHtml(data.termo)}</strong>"`
-                            : 'para os filtros selecionados';
+                    const avisos = Array.isArray(data.avisos) ? data.avisos : [];
+                    ESTADO_BUSCA.vagas = Array.isArray(data.vagas) ? data.vagas : [];
+                    ESTADO_BUSCA.visiveis = Math.min(ESTADO_BUSCA.passo, ESTADO_BUSCA.vagas.length);
+                    ESTADO_BUSCA.termo = data.termo || '';
+                    ESTADO_BUSCA.plataforma = data.plataforma || 'todas';
 
-                        const plataformaLabel = (data.plataforma === 'itjobs')
-                            ? 'no ITJobs'
-                            : (data.plataforma === 'net_empregos')
-                                ? 'no Net-Empregos'
-                                : 'em ITJobs + Net-Empregos';
+                    renderizarBuscaPaginada();
 
-                        const avisos = Array.isArray(data.avisos) ? data.avisos : [];
-                        const avisoHtml = avisos.length
-                            ? `<div class="alert alert-warning alert-custom mt-2"><i class="fas fa-info-circle"></i> ${escapeHtml(avisos.join(' '))}</div>`
-                            : '';
-
-                        let html = `
-                            <div class="alert alert-success alert-custom">
-                                <i class="fas fa-check-circle"></i>
-                                <strong>${data.total}</strong> vaga(s) encontrada(s) ${termoLabel} ${plataformaLabel}
-                            </div>
-                        `;
-
-                        html += avisoHtml;
-
-                        html += renderizarCards(data.vagas || []);
-                        resultados.innerHTML = html;
+                    if (avisos.length) {
+                        resultados.insertAdjacentHTML(
+                            'afterbegin',
+                            `<div class="alert alert-warning alert-custom mb-2"><i class="fas fa-info-circle"></i> ${escapeHtml(avisos.join(' '))}</div>`
+                        );
                     }
                 } else {
                     resultados.innerHTML = `
@@ -633,6 +753,11 @@
                 console.error('Erro:', error);
             }
         });
+
+        const btnCarregarMaisUltimas = document.getElementById('btnCarregarMaisUltimas');
+        if (btnCarregarMaisUltimas) {
+            btnCarregarMaisUltimas.addEventListener('click', carregarUltimas);
+        }
     </script>
 </body>
 </html>

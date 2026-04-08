@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List
 
 from flask import Flask, jsonify, make_response, render_template, request
@@ -18,6 +20,8 @@ from scraper import buscar_todas_vagas, buscar_ultimas_itjobs, buscar_ultimas_ne
 
 CACHE_TTL_SECONDS = 180
 CACHE_CONTROL = "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+ULTIMAS_LIMITE_POR_FONTE = 20
+ULTIMAS_PER_PAGE_PADRAO = 10
 
 # ITJobs usa IDs numéricos para distrito. Usamos este mapa para converter o valor
 # do dropdown em texto e reaproveitar como pós-filtro no Net-Empregos.
@@ -61,6 +65,49 @@ _ULTIMAS_CACHE: Dict[str, Any] = {
 }
 
 
+def _parse_data_publicacao(valor: Any) -> float:
+    """Converte diferentes formatos de data para timestamp; inválido vira 0."""
+    s = str(valor or "").strip()
+    if not s:
+        return 0.0
+
+    try:
+        dt = parsedate_to_datetime(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        pass
+
+    formatos = (
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+    )
+    for fmt in formatos:
+        try:
+            dt = datetime.strptime(s, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
+        except Exception:
+            continue
+
+    return 0.0
+
+
+def _ordenar_vagas_mais_recentes(vagas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Ordena vagas por data de publicação desc (mais recentes primeiro)."""
+    enumeradas = list(enumerate(vagas or []))
+    enumeradas.sort(
+        key=lambda item: (_parse_data_publicacao(item[1].get("data_publicacao")), item[0]),
+        reverse=True,
+    )
+    return [vaga for _, vaga in enumeradas]
+
+
 def _obter_ultimas_cached(ttl_segundos: int = CACHE_TTL_SECONDS) -> Dict[str, Any]:
     """Retorna as últimas vagas com cache TTL em memória."""
     agora = time.time()
@@ -86,8 +133,12 @@ def _obter_ultimas_cached(ttl_segundos: int = CACHE_TTL_SECONDS) -> Dict[str, An
         return _ULTIMAS_CACHE
 
     try:
-        itjobs = buscar_ultimas_itjobs(limite=5, incluir_detalhes=True)
-        net = buscar_ultimas_net_empregos(limite=5)
+        itjobs = buscar_ultimas_itjobs(
+            limite=ULTIMAS_LIMITE_POR_FONTE,
+            incluir_detalhes=True,
+            max_detalhes=ULTIMAS_LIMITE_POR_FONTE,
+        )
+        net = buscar_ultimas_net_empregos(limite=ULTIMAS_LIMITE_POR_FONTE)
 
         _ULTIMAS_CACHE.update(
             {
@@ -110,14 +161,18 @@ def index():
     itjobs: List[dict] = list(cache.get("itjobs") or [])
     net: List[dict] = list(cache.get("net_empregos") or [])
 
-    ultimas_vagas = itjobs + net
+    ultimas_todas = _ordenar_vagas_mais_recentes(itjobs + net)
+    ultimas_vagas = ultimas_todas[:ULTIMAS_PER_PAGE_PADRAO]
 
     html = render_template(
         "index.html",
         ultimas_vagas=ultimas_vagas,
         ultimas_itjobs=itjobs,
         ultimas_net=net,
-        ultimas_total=len(ultimas_vagas),
+        ultimas_total=len(ultimas_todas),
+        ultimas_page=1,
+        ultimas_per_page=ULTIMAS_PER_PAGE_PADRAO,
+        ultimas_has_more=len(ultimas_todas) > ULTIMAS_PER_PAGE_PADRAO,
         ultimas_erro=cache.get("erro") or "",
     )
 
@@ -131,16 +186,29 @@ def index():
 def ultimas():
     """Retorna as últimas vagas (5 por plataforma)."""
     try:
+        page = max(1, int((request.args.get("page") or "1").strip()))
+        per_page = max(1, min(30, int((request.args.get("per_page") or str(ULTIMAS_PER_PAGE_PADRAO)).strip())))
+
         cache = _obter_ultimas_cached(ttl_segundos=CACHE_TTL_SECONDS)
         itjobs = list(cache.get("itjobs") or [])
         net = list(cache.get("net_empregos") or [])
+        todas = _ordenar_vagas_mais_recentes(itjobs + net)
+
+        inicio = (page - 1) * per_page
+        fim = inicio + per_page
+        vagas_pagina = todas[inicio:fim]
+        has_more = fim < len(todas)
 
         resp = jsonify(
             {
                 "sucesso": True,
+                "vagas": vagas_pagina,
                 "itjobs": itjobs,
                 "net_empregos": net,
-                "total": len(itjobs) + len(net),
+                "page": page,
+                "per_page": per_page,
+                "has_more": has_more,
+                "total": len(todas),
                 "cache_erro": cache.get("erro") or "",
             }
         )
