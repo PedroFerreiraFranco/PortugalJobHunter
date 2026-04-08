@@ -1,0 +1,39 @@
+# Arquivos e diretórios do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Flask
+instance/
+.webassets-cache
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Banco de dados (caso adicione no futuro)
+*.db
+*.sqlite
+*.sqlite3
+
+# Variáveis de ambiente
+.env
+.env.local
