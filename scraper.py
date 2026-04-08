@@ -216,12 +216,13 @@ def buscar_vagas_itjobs(
         else:
             localizacao_texto_filtro = str(localizacao).strip()
 
-    if not params and not localizacao_texto_filtro:
-        return vagas
-
     work_model = _normalizar_work_model(modelo_trabalho)
     if work_model:
         params["work_model"] = work_model
+
+    # Permite buscas apenas por modelo de trabalho (ex.: remoto) mesmo sem termo.
+    if not params and not localizacao_texto_filtro:
+        return vagas
 
     url = "https://www.itjobs.pt/emprego"
 
@@ -606,6 +607,7 @@ def buscar_ultimas_net_empregos(limite: int = 5) -> List[Vaga]:
 def buscar_vagas_net_empregos(
     termo: str,
     localizacao_filtro: str = "",
+    filtrar_ti_quando_sem_termo: bool = True,
     limite: int = 30,
 ) -> List[Vaga]:
     """Busca vagas no Net-Empregos via RSS público e aplica pós-filtros.
@@ -657,7 +659,7 @@ def buscar_vagas_net_empregos(
             if localizacao_filtro and localizacao_filtro.lower() not in local_txt.lower():
                 continue
 
-            if not termo and not _parece_vaga_tech(f"{titulo} {categoria}"):
+            if filtrar_ti_quando_sem_termo and not termo and not _parece_vaga_tech(f"{titulo} {categoria}"):
                 continue
 
             if link in vistos:
@@ -749,9 +751,12 @@ def buscar_todas_vagas(
                 f"Buscando vagas no Net-Empregos (termo={termo_busca!r}, local={localizacao_texto!r})..."
             )
 
+        filtrar_ti_sem_termo = plataforma != "net_empregos"
+
         vagas_net = buscar_vagas_net_empregos(
             termo_busca,
             localizacao_filtro=localizacao_texto,
+            filtrar_ti_quando_sem_termo=filtrar_ti_sem_termo,
         )
         todas_vagas.extend(vagas_net)
 
